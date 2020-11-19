@@ -14,6 +14,9 @@ func CreateTMPFile(t *testing.T, input []byte) *os.File {
 	if err != nil {
 		t.Errorf("Error while creating tmp file: %s", err)
 	}
+	t.Cleanup(func() {
+		os.Remove(tmpFile.Name())
+	})
 	_, err = tmpFile.Write(input)
 	if err != nil {
 		t.Errorf("Error while writing test data to tmp file: %s", err)
@@ -40,7 +43,6 @@ func TestPaddedFileChunkReading(t *testing.T) {
 	for _, tt := range testReaders {
 		t.Run(string(tt.input), func(t *testing.T) {
 			tmpFile := CreateTMPFile(t, tt.input)
-			defer os.Remove(tmpFile.Name())
 			readers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
 			for i, reader := range readers {
 				b, err := ioutil.ReadAll(reader)
@@ -59,7 +61,6 @@ func TestPaddedFileChunkReading(t *testing.T) {
 func TestPaddedFileChunkReadingLimit(t *testing.T) {
 	input := []byte("ABCDEFGH")
 	tmpFile := CreateTMPFile(t, input)
-	defer os.Remove(tmpFile.Name())
 	var size int64 = 8
 	numChunks := 2
 	expectedOut1 := []byte("ABCD")
@@ -112,10 +113,7 @@ func TestPaddedFileChunkWriting(t *testing.T) {
 	for _, tt := range testWriters {
 		t.Run(string(tt.output), func(t *testing.T) {
 			// TODO replace for in-memory buffer w/ WriteAt
-			tmpFile, err := ioutil.TempFile("", "rsutils_test")
-			if err != nil {
-				t.Errorf("Error while creating tmp file: %s", err)
-			}
+			tmpFile := CreateTMPFile(t, []byte{})
 			writers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
 			for i, writer := range writers {
 				_, err := writer.Write(tt.inputs[i])
@@ -123,7 +121,7 @@ func TestPaddedFileChunkWriting(t *testing.T) {
 					t.Errorf("Writing to tmp file failed: %s", err)
 				}
 			}
-			_, err = tmpFile.Seek(0, 0)
+			_, err := tmpFile.Seek(0, 0)
 			if err != nil {
 				t.Errorf("Error while rewinding tmp file: %s", err)
 			}
@@ -190,7 +188,6 @@ func TestPaddedFileChunkSeeking(t *testing.T) {
 	for _, tt := range testSeekers {
 		t.Run(string(tt.input), func(t *testing.T) {
 			tmpFile := CreateTMPFile(t, tt.input)
-			defer os.Remove(tmpFile.Name())
 			seekers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
 
 			buf := make([]byte, tt.toReadFirst)
