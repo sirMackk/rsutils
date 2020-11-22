@@ -30,6 +30,7 @@ func (p *ShardManager) findCorruptShards() ([]int, error) {
 			return nil, fmt.Errorf("Error hashing shard %d: %s", i, err)
 		}
 		if fmt.Sprintf("%x", hasher.Sum(nil)) != p.metadata.Hashes[i] {
+			//fmt.Printf("%d - %x != %x\n", i, p.metadata.Hashes[i], hasher.Sum(nil))
 			brokenShards = append(brokenShards, i)
 		}
 	}
@@ -37,7 +38,7 @@ func (p *ShardManager) findCorruptShards() ([]int, error) {
 }
 
 func (p *ShardManager) Read(dataDst io.Writer) error {
-	for _, dataSource := range p.dataSources {
+	for _, dataSource := range p.dataSources[:p.metadata.DataShards] {
 		_, err := io.Copy(dataDst, dataSource)
 		if err != nil {
 			return fmt.Errorf("Error while reading: %s", err)
