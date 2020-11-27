@@ -29,8 +29,7 @@ func (p *ShardManager) findCorruptShards() ([]int, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Error hashing shard %d: %s", i, err)
 		}
-		if fmt.Sprintf("%x", hasher.Sum(nil)) != p.metadata.Hashes[i] {
-			//fmt.Printf("%d - %x != %x\n", i, p.metadata.Hashes[i], hasher.Sum(nil))
+		if newHash := fmt.Sprintf("%x", hasher.Sum(nil)); newHash != p.metadata.Hashes[i] {
 			brokenShards = append(brokenShards, i)
 		}
 	}

@@ -2,8 +2,8 @@ package rsutils
 
 import (
 	"bytes"
-	"io"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 )
@@ -24,11 +24,11 @@ func getMetadata() *Metadata {
 	return &Metadata{
 		Size: int64(808),
 		Hashes: []string{
-		"aa8b8979f1486fe03d54d1bdd4a32018386285a2ad0dc9a2820f0da3d6293e72",
-		"64163fa75b3eadb78f376dd7ab84e48595e9748dadbfb50e2126bef20481baa1",
-		"e32a8903342ab6dc68d46462df727f6812f6fbb728c4a1240b625331b811c147",
-	},
-		DataShards: 2,
+			"aa8b8979f1486fe03d54d1bdd4a32018386285a2ad0dc9a2820f0da3d6293e72",
+			"64163fa75b3eadb78f376dd7ab84e48595e9748dadbfb50e2126bef20481baa1",
+			"e32a8903342ab6dc68d46462df727f6812f6fbb728c4a1240b625331b811c147",
+		},
+		DataShards:   2,
 		ParityShards: 1,
 	}
 }
@@ -47,7 +47,6 @@ func TestShareCreatorEncode(t *testing.T) {
 	parityShards := fixtureMd.ParityShards
 	expectedHashes := fixtureMd.Hashes
 
-
 	creator := NewShardCreator([]io.Reader{input1, input2}, inputSize*2, dataShards, parityShards)
 
 	var parityBuffer bytes.Buffer
@@ -61,8 +60,8 @@ func TestShareCreatorEncode(t *testing.T) {
 	if md.DataShards != dataShards || md.ParityShards != parityShards {
 		t.Errorf("Incorrect metadata ds/ps: got %d/%d, expected %d/%d", md.DataShards, md.ParityShards, dataShards, parityShards)
 	}
-	if lenHashes := len(md.Hashes); lenHashes != dataShards + parityShards {
-		t.Errorf("Incorrect number of hashes: got %d, expected %d", lenHashes, dataShards + parityShards)
+	if lenHashes := len(md.Hashes); lenHashes != dataShards+parityShards {
+		t.Errorf("Incorrect number of hashes: got %d, expected %d", lenHashes, dataShards+parityShards)
 	}
 
 	for i := range md.Hashes {

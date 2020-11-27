@@ -44,6 +44,7 @@ func (p *ShardCreator) Encode(parityDst []io.Writer) (*Metadata, error) {
 		hashingWriters[i] = io.MultiWriter(parityDst[i], hashers[p.dataShards+i])
 	}
 
+	fmt.Println("Ready to encode")
 	err = RSEncoder.Encode(hashingReaders, hashingWriters)
 	if err != nil {
 		return nil, fmt.Errorf("Error encoding: %s", err)

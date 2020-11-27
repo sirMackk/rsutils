@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"os"
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"testing"
 )
 
@@ -63,7 +63,6 @@ func getShards(t *testing.T) []io.ReadWriteSeeker {
 	return clonedShards
 }
 
-
 func TestShardManagerRead(t *testing.T) {
 	shards := getShards(t)
 	md := getMetadata()
@@ -86,10 +85,10 @@ func TestShardManagerRead(t *testing.T) {
 
 func TestShardManagerCheckHealth(t *testing.T) {
 	md := getMetadata()
-	corruptedTests := []struct{
-		name string
+	corruptedTests := []struct {
+		name            string
 		shardsToCorrupt []int
-		expectedErrMsg string
+		expectedErrMsg  string
 	}{
 		{"0 corrupt", []int{}, ""},
 		{"1 corrupt", []int{0}, "Corrupted shards: [0]"},
@@ -120,7 +119,6 @@ func TestShardManagerCheckHealth(t *testing.T) {
 	}
 }
 
-
 func TestShardManagerCheckHealthRewindsDataSources(t *testing.T) {
 	shards := getShards(t)
 	md := getMetadata()
@@ -141,8 +139,8 @@ func TestShardManagerCheckHealthRewindsDataSources(t *testing.T) {
 
 func TestShardManagerRepairBadDataShard(t *testing.T) {
 	md := getMetadata()
-	badShardTests := []struct{
-		name string
+	badShardTests := []struct {
+		name        string
 		badShardIdx int
 	}{
 		{"bad data shard", 1},
@@ -181,7 +179,6 @@ func TestShardManagerRepairBadDataShard(t *testing.T) {
 	}
 }
 
-
 func TestShardManagerRepairNotEnoughShards(t *testing.T) {
 	shards := getShards(t)
 	md := getMetadata()
@@ -198,5 +195,57 @@ func TestShardManagerRepairNotEnoughShards(t *testing.T) {
 
 	if err.Error() != expectedErrMsg {
 		t.Errorf("Got error '%s', expected '%s'", err, expectedErrMsg)
+	}
+}
+
+func TestE2EUnevenInput(t *testing.T) {
+	dataShards := 2
+	parityShards := 1
+	parityFile, err := ioutil.TempFile("", "rsutils")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parityFile.Close()
+	t.Cleanup(func() {
+		os.Remove(parityFile.Name())
+	})
+	unevenFile, err := os.Open("testdata/uneven_input1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unevenFile.Close()
+	unevenFileStat, err := unevenFile.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paddedFileChunks := SplitIntoPaddedChunks(unevenFile, unevenFileStat.Size(), dataShards)
+	chunkReaders := make([]io.Reader, len(paddedFileChunks))
+	for i := range paddedFileChunks {
+		chunkReaders[i] = paddedFileChunks[i]
+	}
+	shardCreator := NewShardCreator(chunkReaders, unevenFileStat.Size(), dataShards, parityShards)
+	md, err := shardCreator.Encode([]io.Writer{parityFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, chunk := range paddedFileChunks {
+		_, err = chunk.Seek(0, io.SeekStart)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = parityFile.Seek(0, io.SeekStart)
+
+	shards := make([]io.ReadWriteSeeker, dataShards+parityShards)
+	shards[0] = paddedFileChunks[0]
+	shards[1] = paddedFileChunks[1]
+	shards[2] = parityFile
+
+	shardManager := NewShardManager(shards, md)
+
+	err = shardManager.CheckHealth()
+	if err != nil {
+		t.Errorf("Got health error %s, expected nil", err)
 	}
 }

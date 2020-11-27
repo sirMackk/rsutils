@@ -43,7 +43,7 @@ func TestPaddedFileChunkReading(t *testing.T) {
 	for _, tt := range testReaders {
 		t.Run(string(tt.input), func(t *testing.T) {
 			tmpFile := CreateTMPFile(t, tt.input)
-			readers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
+			readers := SplitIntoPaddedChunks(tmpFile, tt.size, tt.numChunks)
 			for i, reader := range readers {
 				b, err := ioutil.ReadAll(reader)
 				if err != nil {
@@ -69,7 +69,7 @@ func TestPaddedFileChunkReadingLimit(t *testing.T) {
 	bufOut1 := make([]byte, 4)
 	bufOut2 := make([]byte, 4)
 
-	readers := NewPaddedFileChunk(tmpFile, size, numChunks)
+	readers := SplitIntoPaddedChunks(tmpFile, size, numChunks)
 
 	_, err := readers[0].Read(bufOut1)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestPaddedFileChunkWriting(t *testing.T) {
 		t.Run(string(tt.output), func(t *testing.T) {
 			// TODO replace for in-memory buffer w/ WriteAt
 			tmpFile := CreateTMPFile(t, []byte{})
-			writers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
+			writers := SplitIntoPaddedChunks(tmpFile, tt.size, tt.numChunks)
 			for i, writer := range writers {
 				_, err := writer.Write(tt.inputs[i])
 				if err != nil {
@@ -188,7 +188,7 @@ func TestPaddedFileChunkSeeking(t *testing.T) {
 	for _, tt := range testSeekers {
 		t.Run(string(tt.input), func(t *testing.T) {
 			tmpFile := CreateTMPFile(t, tt.input)
-			seekers := NewPaddedFileChunk(tmpFile, tt.size, tt.numChunks)
+			seekers := SplitIntoPaddedChunks(tmpFile, tt.size, tt.numChunks)
 
 			buf := make([]byte, tt.toReadFirst)
 			_, err := seekers[0].Read(buf)
@@ -221,19 +221,19 @@ func TestPaddedFileChunkSeekingErrors(t *testing.T) {
 	}{
 		{"Bad whence", 0, 4, 0, "Got 4, expected one of: io.SeekStart, io.SeekCurrent, io.SeekEnd"},
 		{"Bad whence 2", 0, -2, 0, "Got -2, expected one of: io.SeekStart, io.SeekCurrent, io.SeekEnd"},
-		{"Offset > limit 1", 5, 0, 0, "Requested offset 5 is larger than chunk limit 4"},
-		{"Offset > limit 2", 5, 1, 0, "Requested offset 5 is larger than chunk limit 4"},
-		{"Offset > limit 3", 2, 2, 0, "Requested offset 6 is larger than chunk limit 4"},
-		{"Offset < limit 1", -1, 0, 0, "Requested offset -1 is smaller than chunk beginning 0"},
-		{"Offset < limit 2", -1, 1, 0, "Requested offset -1 is smaller than chunk beginning 0"},
-		{"Offset < limit 2", -6, 2, 0, "Requested offset -2 is smaller than chunk beginning 0"},
+		{"Offset > limit 1", 5, 0, 0, "Requested position 5 is larger than chunk limit 4"},
+		{"Offset > limit 2", 5, 1, 0, "Requested position 5 is larger than chunk limit 4"},
+		{"Offset > limit 3", 2, 2, 0, "Requested position 6 is larger than chunk limit 4"},
+		{"Offset < limit 1", -1, 0, 0, "Requested position -1 is smaller than chunk beginning 0"},
+		{"Offset < limit 2", -1, 1, 0, "Requested position -1 is smaller than chunk beginning 0"},
+		{"Offset < limit 2", -6, 2, 0, "Requested position -2 is smaller than chunk beginning 0"},
 	}
 
 	for _, tt := range testSeekers {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpFile := CreateTMPFile(t, input)
 			defer os.Remove(tmpFile.Name())
-			seekers := NewPaddedFileChunk(tmpFile, size, numChunks)
+			seekers := SplitIntoPaddedChunks(tmpFile, size, numChunks)
 
 			pos, err := seekers[0].Seek(int64(tt.offset), tt.whence)
 			if pos != tt.expectedPos {

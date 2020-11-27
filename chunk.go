@@ -18,7 +18,7 @@ type PaddedFileChunk struct {
 	position int64
 }
 
-func NewPaddedFileChunk(src ReadAtWriteAtSeeker, size int64, numChunks int) []*PaddedFileChunk {
+func SplitIntoPaddedChunks(src ReadAtWriteAtSeeker, size int64, numChunks int) []*PaddedFileChunk {
 	chunkSize := size / int64(numChunks)
 	if size%int64(numChunks) != 0 {
 		chunkSize += 1
@@ -35,21 +35,32 @@ func NewPaddedFileChunk(src ReadAtWriteAtSeeker, size int64, numChunks int) []*P
 }
 
 func (pfc *PaddedFileChunk) Read(p []byte) (n int, err error) {
+	// chunk is all read
 	if pfc.position == pfc.limit-pfc.offset {
 		return 0, io.EOF
 	}
-	pBufLen := int64(len(p))
-	n, err = pfc.data.ReadAt(p, pfc.offset+pfc.position)
+
+	var writeTarget []byte = p
+	pBufLen := len(p)
+	bufShrunk := false
+	// if buffer is larger than the chunk
+	if bytesLeft := pfc.limit - pfc.offset + pfc.position; int64(pBufLen) > bytesLeft {
+		writeTarget = make([]byte, bytesLeft)
+		pBufLen = int(bytesLeft)
+		bufShrunk = true
+	}
+	n, err = pfc.data.ReadAt(writeTarget, pfc.offset+pfc.position)
 	if err != nil {
 		if err == io.EOF {
-			copy(p[n:pBufLen], make([]byte, pBufLen-int64(n)))
-			pfc.position += int64(n)
-			// return chunksize as length n to zero out p
-			return int(pfc.limit - pfc.offset), io.EOF
+			// fill rest of buffer with 0's
+			copy(writeTarget[n:pBufLen], make([]byte, pBufLen-n))
+			n = pBufLen
 		}
-		return n, err
 	}
 	pfc.position += int64(n)
+	if bufShrunk {
+		copy(p, writeTarget)
+	}
 	return n, err
 }
 
@@ -67,23 +78,23 @@ func (pfc *PaddedFileChunk) Write(p []byte) (n int, err error) {
 }
 
 func (pfc *PaddedFileChunk) Seek(offset int64, whence int) (int64, error) {
-	var newOffset int64
+	var position int64
 	switch whence {
 	case io.SeekStart:
-		newOffset = pfc.offset + offset
+		position = offset
 	case io.SeekCurrent:
-		newOffset = pfc.position + offset
+		position = pfc.position + offset
 	case io.SeekEnd:
-		newOffset = pfc.limit + offset
+		position = pfc.limit + offset
 	default:
 		return pfc.offset, fmt.Errorf("Got %d, expected one of: io.SeekStart, io.SeekCurrent, io.SeekEnd", whence)
 	}
-	if newOffset > pfc.limit {
-		return pfc.offset, fmt.Errorf("Requested offset %d is larger than chunk limit %d", newOffset, pfc.limit)
-	} else if newOffset < pfc.offset {
-		return pfc.offset, fmt.Errorf("Requested offset %d is smaller than chunk beginning %d", newOffset, pfc.offset)
+	if pfc.offset+position > pfc.limit {
+		return pfc.offset, fmt.Errorf("Requested position %d is larger than chunk limit %d", position, pfc.limit)
+	} else if pfc.offset+position < pfc.offset {
+		return pfc.offset, fmt.Errorf("Requested position %d is smaller than chunk beginning %d", position, pfc.offset)
 	} else {
-		pfc.position = newOffset
+		pfc.position = position
 		return pfc.position, nil
 	}
 }
