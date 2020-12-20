@@ -12,9 +12,111 @@ Specifically:
 
 [Reed-Solomon error correction](https://en.wikipedia.org/wiki/Reed%E2%80%93Solomon_error_correction) is an interesting and popular way of repairing corrupted data.
 
+## Example Usage
+
+Creating shards creates a piece of metadata that's required to check/repair the data later.
+
+### Metadata
+
+```go
+type Metadata struct {
+	Size         int64
+	Hashes       []string
+	DataShards   int
+	ParityShards int
+}
+```
+
+Note: `Hashes` contains sha256 hashes of each data and parity shard to check their integrity.
+
+
+### Creating parity shards
+
+Use a ShardCreator to generate parity shards:
+
+```go
+dataShards = 10
+parityShards = 4
+dataSizeBytes = 400
+// We need <dataShards> number of readers that contain data. These could be streams, chunks of a file, or even different files (if they are the same size).
+dataSources := make([]io.Reader, 10)
+// We need <parityShards> number of writers that could be streams or files.
+parityWriters := make([]io.Writer, 4)
+creator := NewShardCreator(dataSources, dataSizeBytes, dataShards, parityShards)
+// We want to save the metadata somewhere like a json file or database to keep track of the shard hashes.
+metadata, err := creator.Encode(parityWriters)
+```
+
+### Checking data integrity
+
+Use a ShardManager to check data/parity integrity and repair broken data:
+
+```go
+dataShards = 10
+parityShards = 4
+// We need the metadata output by ShardCreator.Encode
+md := &Metadata{<bla bla>}
+// We need the data and parity shards as ReadWriteSeekers to check the integrity of each shard.
+shards := make([]io.ReadWriteSeeker, dataShards+parityShards)
+manager := NewShardManager(shards, md)
+// err = nil if all shards are good.
+err := manager.CheckHealth()
+```
+
+### Repairing data
+
+ Use a ShardManager to repair data when you know it's broken:
+
+```go
+dataShards = 10
+parityShards = 4
+// We need the metadata output by ShardCreator.Encode
+md := &Metadata{<bla bla>}
+// We need the data and parity shards as ReadWriteSeekers to fix the data/parity in place.
+shards := make([]io.ReadWriteSeeker, dataShards+parityShards)
+manager := NewShardManager(shards, md)
+// Note: if the number of broken shards is bigger than available parity shards, this will fail. 
+err := manager.Repair()
+```
+
+### Extra: Chunking a file
+
+In many cases, you will be working with files, so there's a utility called function `SplitIntoPaddedChunks` that chunks a file into _n_ streams that expose Read/Write/Seek methods.
+
+This function takes anything that implements that `ReadAtWriteAtSeeker` interface:
+
+```go
+type ReadAtWriteAtSeeker interface {
+	io.ReaderAt
+	io.WriterAt
+	io.Seeker
+}
+```
+
+A Go *os.File will work nicely here.
+
+For example:
+
+```go
+dataFile, _ := os.Open(filePath)
+defer dataFile.Close()
+// We need the size of the input file to know how to pad the last chunk.
+dataFileStat, _ := dataFile.Stat()
+dataFileSize := dataFileStat.Size()
+
+// How many chunks do we want?
+numChunks := 12
+
+dataChunks := SplitIntoPaddedChunks(dataFile, dataFileSize, numChunks)
+
+// len(dataChunks) == numChunks
+// Each dataChunk fulfills the io.Reader, io.Writer, and io.Seeker interfaces.
+//  Before feeding it to either ShardCreator or ShardManager, you will have to make them into io.Readers or io.ReadWriteSeekers through an explicit cast.
+```
+
 ## TODO
 
-1. Extend README with example usage.
+1. ~Extend README with example usage.~
 2. Extend code documentation.
 
 ## License
