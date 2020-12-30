@@ -12,9 +12,12 @@ type ReadAtWriteAtSeeker interface {
 }
 
 type PaddedFileChunk struct {
-	data     ReadAtWriteAtSeeker
-	offset   int64
-	limit    int64
+	data ReadAtWriteAtSeeker
+	// beginning of chunk, absolute within the file
+	offset int64
+	// end of chunk, absolute within the file
+	limit int64
+	// position relative to offset
 	position int64
 }
 
@@ -26,7 +29,8 @@ func SplitIntoPaddedChunks(src ReadAtWriteAtSeeker, size int64, numChunks int) [
 	readWriteSeekers := make([]*PaddedFileChunk, numChunks)
 	for i := 0; i < numChunks; i++ {
 		readWriteSeekers[i] = &PaddedFileChunk{
-			data:   src,
+			data: src,
+			// offset is inclusive, limit exclusive - [offset, limit)
 			offset: int64(i) * chunkSize,
 			limit:  int64(i+1) * chunkSize,
 		}
@@ -35,31 +39,34 @@ func SplitIntoPaddedChunks(src ReadAtWriteAtSeeker, size int64, numChunks int) [
 }
 
 func (pfc *PaddedFileChunk) Read(p []byte) (n int, err error) {
-	// chunk is all read
+	// f chunk is all read
 	if pfc.position == pfc.limit-pfc.offset {
 		return 0, io.EOF
 	}
 
-	var writeTarget []byte = p
+	var readBuffer []byte = p
 	pBufLen := len(p)
 	bufShrunk := false
-	// if buffer is larger than the chunk
+	// if buffer is larger than the chunk, we have to create a smaller buffer
+	// to prevent reading from the next chunk. Then, we will write to original
+	// buffer 'p'.
 	if bytesLeft := pfc.limit - pfc.offset + pfc.position; int64(pBufLen) > bytesLeft {
-		writeTarget = make([]byte, bytesLeft)
+		readBuffer = make([]byte, bytesLeft)
 		pBufLen = int(bytesLeft)
 		bufShrunk = true
 	}
-	n, err = pfc.data.ReadAt(writeTarget, pfc.offset+pfc.position)
+	n, err = pfc.data.ReadAt(readBuffer, pfc.offset+pfc.position)
 	if err != nil {
+		// if we're reading the last chunk and there is not enough data to fill
+		// the buffer, we fill it with zeroes.
 		if err == io.EOF {
-			// fill rest of buffer with 0's
-			copy(writeTarget[n:pBufLen], make([]byte, pBufLen-n))
+			copy(readBuffer[n:pBufLen], make([]byte, pBufLen-n))
 			n = pBufLen
 		}
 	}
 	pfc.position += int64(n)
 	if bufShrunk {
-		copy(p, writeTarget)
+		copy(p, readBuffer)
 	}
 	return n, err
 }
