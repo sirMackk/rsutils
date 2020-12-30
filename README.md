@@ -12,7 +12,13 @@ Specifically:
 
 [Reed-Solomon error correction](https://en.wikipedia.org/wiki/Reed%E2%80%93Solomon_error_correction) is an interesting and popular way of repairing corrupted data.
 
-## Example Usage
+## Example Usage - Stable, high-level API
+
+TODO: Document how to invoke Encode/Open+Read functions from file_sharder.go
+
+## Example Usage - Experimental, lower-level API
+
+This API may change without notice!
 
 Creating shards creates a piece of metadata that's required to check/repair the data later.
 
