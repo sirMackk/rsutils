@@ -14,7 +14,50 @@ Specifically:
 
 ## Example Usage - Stable, high-level API
 
-TODO: Document how to invoke Encode/Open+Read functions from file_sharder.go
+This API is set up to take a data file and produce n parity shards and metadata information.
+
+The parity shards are characterized by:
+- each parity shard's size equals `(data file size / data shards)`.
+- they can number at least 1 but less than 256.
+
+The metadata is needed to read and repair the data. It looks like:
+
+```go
+type Metadata struct {
+	Size         int64
+	Hashes       []string
+	DataShards   int
+	ParityShards int
+}
+```
+
+Creating parity shards is done using the `Encode` function:
+
+```go
+dataShards := 3
+parity1Output, _ := os.Create("parity1")
+parity2Output, _ := os.Create("parity2")
+dataFile, _ := os.Open("dataFile")
+
+meta, _ := rsutils.Encode(dataFile, dataShards, []io.Writer{parity1Output, parity2Output})
+// Save "meta" somewhere, eg. a json file, a database, etc.
+```
+
+Reading data back is done using an io.Reader interface that checks integrity and attempts to repair files without the user knowing. If the data corruption is too great, it will error. The reason why the inputs to Read are all *os.File is because the need to read, write, and seek them in case of repairing corrupt data. This would be expensive to do over the network so the more common use case is to do it on local files.
+
+```go
+dataFile, _ := os.Open("dataFile")
+parity1, _ := os.Open("parity1")
+parity2, _ := os.Open("parity2")
+// re-use metadata object from previous example.
+decoder, _ := rsutils.Open(dataFile, []*os.File{parity1, parity2}, meta)
+
+buf := make([]byte, 512)
+// Checks integrity on first read. If corruption is detected and have enough
+// data, will repair data and parity files in place, then continue with Read operation.
+decoder.Read(buf)
+// buf contains the first 512 bytes of dataFile
+```
 
 ## Example Usage - Experimental, lower-level API
 
