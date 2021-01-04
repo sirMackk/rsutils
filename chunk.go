@@ -50,7 +50,7 @@ func (pfc *PaddedFileChunk) Read(p []byte) (n int, err error) {
 	// if buffer is larger than the chunk, we have to create a smaller buffer
 	// to prevent reading from the next chunk. Then, we will write to original
 	// buffer 'p'.
-	if bytesLeft := pfc.limit - pfc.offset + pfc.position; int64(pBufLen) > bytesLeft {
+	if bytesLeft := pfc.limit - pfc.offset - pfc.position; int64(pBufLen) > bytesLeft {
 		readBuffer = make([]byte, bytesLeft)
 		pBufLen = int(bytesLeft)
 		bufShrunk = true
